@@ -24,7 +24,7 @@ docker-compose up -d
 ### 4. Start the Flask Application
 In a new shell, navigate to the project root and run:
 ```sh
-python project_root/app.py
+python backend/app.py
 ```
 
 ### 5. Access the API Documentation
@@ -37,4 +37,19 @@ The Flask server should be running on:
 
 You can now make API requests and explore the available endpoints!
 
-pip install -r requirements.txt
+### 7. Start Frontend
+in a new terminal window download and install froneend dependecies
+```
+cd frontend
+npm install
+```
+start the react app
+```
+npm start
+```
+
+access react app via http://localhost:3000/
+
+login:
+`testuser`
+`password`
