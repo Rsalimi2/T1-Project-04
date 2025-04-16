@@ -46,11 +46,17 @@ const analyzeDataTypes = (fields, students) => {
 
 const StudentList = () => {
     const [students, setStudents] = useState([]);
+    const [originalStudents, setOriginalStudents] = useState([]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     const [maskingConfig, setMaskingConfig] = useState({});
     const [isMasking, setIsMasking] = useState(false);
     const [showConfig, setShowConfig] = useState(false);
+
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10); // You can adjust this value
+    const [totalPages, setTotalPages] = useState(0);
 
     const fetchStudents = useCallback(async () => {
         setLoading(true);
@@ -58,25 +64,37 @@ const StudentList = () => {
         try {
             const response = await axios.get("http://127.0.0.1:5000/students");
             const studentData = response.data;
+            setOriginalStudents(studentData); // Store the original data
             setStudents(studentData);
             setMaskingConfig(analyzeDataTypes(columnOrder, studentData));
+            setTotalPages(Math.ceil(studentData.length / itemsPerPage)); // Calculate total pages
             setLoading(false);
         } catch (err) {
             setError(err.message);
             setLoading(false);
             console.error("Error fetching students:", err);
         }
-    }, []);
+    }, [itemsPerPage]); // Added itemsPerPage as a dependency
 
     useEffect(() => {
         fetchStudents();
     }, [fetchStudents]);
+
+    useEffect(() => {
+        // Recalculate total pages whenever the students data or itemsPerPage changes
+        setTotalPages(Math.ceil(students.length / itemsPerPage));
+        // Reset to the first page if the current page is out of bounds
+        if (currentPage > Math.ceil(students.length / itemsPerPage) && Math.ceil(students.length / itemsPerPage) > 0) {
+            setCurrentPage(1);
+        }
+    }, [students, itemsPerPage, currentPage]);
 
     const handleDelete = (id) => {
         axios
             .delete(`http://127.0.0.1:5000/students/${id}`)
             .then(() => {
                 setStudents((prevStudents) => prevStudents.filter((student) => student.StudentID !== id));
+                setOriginalStudents((prevOriginalStudents) => prevOriginalStudents.filter((student) => student.StudentID !== id));
             })
             .catch((err) => {
                 console.error("Error deleting student:", err);
@@ -96,8 +114,8 @@ const StudentList = () => {
         setError(null);
         try {
             const response = await axios.post("http://127.0.0.1:5000/api/mask", {
-                data: students,
-                originalData: students, // Send original data for "none" rule
+                data: originalStudents, // Use original data for masking
+                originalData: originalStudents, // Send original data for "none" rule
                 config: maskingConfig,
             });
             setStudents(response.data);
@@ -109,10 +127,21 @@ const StudentList = () => {
         }
     };
 
-    const handleSaveConfig = () => {
-        const configData = JSON.stringify(maskingConfig, null, 2);
-        const filename = 'masking_config.json';
-        const blob = new Blob([configData], { type: 'application/json' });
+    const saveMaskingConfigCsv = () => {
+        const csvRows = [];
+        const headers = ["Field", "Masking Rule"];
+        csvRows.push(headers.join(','));
+
+        for (const field in maskingConfig) {
+            if (maskingConfig.hasOwnProperty(field)) {
+                const rule = maskingConfig[field].maskingRule;
+                csvRows.push([field, rule].join(','));
+            }
+        }
+
+        const csvData = csvRows.join('\n');
+        const filename = 'masking_config.csv';
+        const blob = new Blob([csvData], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -121,6 +150,10 @@ const StudentList = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    const handleSaveConfig = () => {
+        saveMaskingConfigCsv();
     };
 
     const toggleConfigDisplay = () => {
@@ -128,17 +161,93 @@ const StudentList = () => {
     };
 
     const downloadStudentData = () => {
-        const studentData = JSON.stringify(students, null, 2);
-        const filename = 'student_data.json';
-        const blob = new Blob([studentData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const csvRows = [];
+        if (students.length > 0) {
+            const headers = columnOrder.join(',');
+            csvRows.push(headers);
+
+            students.forEach(student => {
+                const values = columnOrder.map(key => student[key]);
+                csvRows.push(values.join(','));
+            });
+
+            const csvData = csvRows.join('\n');
+            const filename = 'student_data.csv';
+            const blob = new Blob([csvData], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else {
+            alert("No student data to download.");
+        }
+    };
+
+    // Function to get the students for the current page
+    const getCurrentPageStudents = () => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return students.slice(startIndex, endIndex);
+    };
+
+    // Handle page change
+    const handlePageChange = (newPage) => {
+        setCurrentPage(newPage);
+    };
+
+    // Handle items per page change
+    const handleItemsPerPageChange = (event) => {
+        const newItemsPerPage = parseInt(event.target.value, 10);
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1); // Reset to the first page when items per page changes
+    };
+
+    const renderPaginationControls = () => {
+        const pageNumbers = [];
+        for (let i = 1; i <= totalPages; i++) {
+            pageNumbers.push(i);
+        }
+
+        return (
+            <div className="pagination-controls">
+                <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="button pagination-button"
+                >
+                    Previous
+                </button>
+                {pageNumbers.map(number => (
+                    <button
+                        key={number}
+                        onClick={() => handlePageChange(number)}
+                        className={`button pagination-button ${currentPage === number ? 'active' : ''}`}
+                    >
+                        {number}
+                    </button>
+                ))}
+                <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="button pagination-button"
+                >
+                    Next
+                </button>
+                <div className="items-per-page">
+                    Items per page:
+                    <select value={itemsPerPage} onChange={handleItemsPerPageChange}>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+            </div>
+        );
     };
 
     if (loading) {
@@ -148,6 +257,8 @@ const StudentList = () => {
     if (error) {
         return <div className="error">Error loading student data: {error}</div>;
     }
+
+    const currentPageStudents = getCurrentPageStudents();
 
     return (
         <div className="student-list-container container">
@@ -169,7 +280,7 @@ const StudentList = () => {
                     {isMasking && <div className="masking-loading">Applying Masking...</div>}
                 </div>
                 <button onClick={downloadStudentData} className="button download-button">
-                    Download Student Data
+                    Download Student Data (CSV)
                 </button>
             </div>
 
@@ -232,7 +343,7 @@ const StudentList = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {students.map((student) => (
+                    {currentPageStudents.map((student) => (
                         <tr key={student.StudentID}>
                             {columnOrder.map(key => (
                                 <td key={key}>{student[key]}</td>
@@ -242,9 +353,7 @@ const StudentList = () => {
                 </tbody>
             </table>
 
-            <Link to="/audit-log" className="button secondary-button">
-                View Audit Log
-            </Link>
+            {students.length > 0 && renderPaginationControls()}
         </div>
     );
 };

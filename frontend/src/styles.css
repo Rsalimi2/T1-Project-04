@@ -392,3 +392,42 @@ h3 {
   gap: 10px;
   align-items: center;
 }
+
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+    margin-bottom: 20px;
+
+}
+
+.pagination-button {
+    padding: 8px 12px;
+    margin: 0 5px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    background-color: Grey;
+}
+
+.pagination-button.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.pagination-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.items-per-page {
+    margin-left: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.items-per-page select {
+    margin-left: 5px;
+    padding: 6px;
+}
